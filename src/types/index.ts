@@ -43,6 +43,36 @@ export interface Zone {
   order: number;
 }
 
+export type ThemeAvailability = "playable" | "coming_soon";
+export type MusicMood = "steady" | "hype" | "chill";
+
+export type GuestState =
+  | "ARRIVING"
+  | "QUEUED"
+  | "ENTERING"
+  | "DANCING"
+  | "ORDERING"
+  | "SERVED"
+  | "LEAVING";
+
+export interface ClubGuest {
+  id: string;
+  look: string;
+  state: GuestState;
+  mood: "happy" | "neutral" | "impatient";
+  progress: number;
+  rewardGranted: boolean;
+}
+
+export interface ClubEvent {
+  id: string;
+  type: "vip-rush" | "birthday-crew" | "service-glitch";
+  title: string;
+  detail: string;
+  startedAt: number;
+  durationMs: number;
+}
+
 // --- VIPs ---
 export type OrderSource = "bar" | "kitchen" | "both";
 
@@ -67,11 +97,20 @@ export interface VipVisit {
 export interface GameProgress {
   clubName: string;
   isOpen: boolean;          // patrons/VIPs/orders only happen while open
+  selectedThemeId: string | null;
+  unlockedThemeIds: string[];
+  themeSwitchUnlocked: boolean;
   coins: number;
   tips: number;
+  reputation: number;
+  totalCoinsEarned: number;
+  totalGuestsServed: number;
+  totalUpgradesBought: number;
+  totalEventsHandled: number;
   clearedItemIds: string[];
   nextLevelIndex: number;  // which level of the open-ended track plays next
   totalStars: number;
+  bestVibeStreak: number;
   vipsCollected: number;
   miniGameLevels: Partial<Record<MiniGameId, number>>; // next unlocked level per mini-game
 }

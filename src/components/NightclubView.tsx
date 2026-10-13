@@ -2,19 +2,31 @@ import { useEffect, useMemo, useState } from "react";
 import { ALL_ITEMS, getActiveZone, isZoneCleared, itemsForZone } from "../data/items";
 import { FLOOR_TILE_LAYOUT, FLOOR_ROWS, FLOOR_ROW_ITEMS } from "../data/floorGrid";
 import { ZONES } from "../data/zones";
-import type { GameProgress, VipCharacter, VipVisit } from "../types";
+import type { ThemeProfile } from "../data/themes";
+import type { ObjectiveSnapshot } from "../game/objectives";
+import type { ClubEvent, ClubGuest, GameProgress, MusicMood, VipCharacter, VipVisit } from "../types";
 import type { useRestroomSystem } from "../hooks/useRestroomSystem";
 import type { useKitchenSystem } from "../hooks/useKitchenSystem";
 import RoomStage, { depthScale } from "./RoomStage";
 import RoomSwitcher from "./RoomSwitcher";
 
 interface NightclubViewProps {
+  selectedTheme: ThemeProfile | null;
   progress: GameProgress;
   onPurchase: (itemId: string, price: number) => void;
   onPlay: () => void;
   onMiniGames: () => void;
   onRenameClub: (name: string) => void;
   onToggleOpen: () => void;
+  onSwitchTheme: (themeId: string) => void;
+  onChangeMood: (mood: MusicMood) => void;
+  musicMood: MusicMood;
+  vibeScore: number;
+  vibeStreak: number;
+  objectives: ObjectiveSnapshot[];
+  queueCount: number;
+  guests: ClubGuest[];
+  activeEvent: ClubEvent | null;
   vipVisit: VipVisit | null;
   currentVip: VipCharacter | null;
   onCollectVip: () => void;
@@ -22,13 +34,17 @@ interface NightclubViewProps {
   kitchen: ReturnType<typeof useKitchenSystem>;
   capacity: number;
   occupancy: number;
+  level: number;
 }
 
 const TOTAL_ITEMS = ALL_ITEMS.length;
 
 export default function NightclubView({
+  selectedTheme,
   progress, onPurchase, onPlay, onMiniGames, onRenameClub, onToggleOpen,
+  onSwitchTheme, onChangeMood, musicMood, vibeScore, vibeStreak, objectives, queueCount, guests, activeEvent,
   vipVisit, currentVip, onCollectVip, restroom, kitchen, capacity, occupancy,
+  level,
 }: NightclubViewProps) {
   const [insufficientFor, setInsufficientFor] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
@@ -58,6 +74,9 @@ export default function NightclubView({
 
   const dirtyStalls = restroom.stallStates.filter((s) => clearedSet.has(s.id) && !s.clean).length;
   const carryingFood = kitchen.carrying && !!kitchen.order;
+  const happyGuests = guests.filter((guest) => guest.mood === "happy").length;
+
+  if (!selectedTheme) return null;
 
   function tryBuy(itemId: string, price: number) {
     if (progress.coins < price) {
@@ -101,12 +120,58 @@ export default function NightclubView({
               : clearedCount === 0 ? "A rundown club, buried in junk. Earn coins and tap anything to start cleaning up."
               : `Restoration ${pct}% — building out ${activeZone}`}
           </p>
+          <p className="mt-1 font-body text-[11px] text-gold">
+            {selectedTheme.signage} {selectedTheme.shortLabel} · {selectedTheme.danceFlavor}
+          </p>
         </div>
         <div className="shrink-0 text-right">
           <p className="font-display text-sm text-gold">🪙 {progress.coins.toLocaleString()}</p>
           <p className="font-display text-xs text-cyan">💎 {progress.tips.toLocaleString()}</p>
+          <p className="font-body text-[10px] text-haze">Rep {progress.reputation} · Lv {level}</p>
         </div>
       </div>
+
+      <div className="rounded-xl border border-haze/20 bg-plum/45 p-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="font-body text-[10px] uppercase tracking-wide text-haze">Vibe Meter</p>
+            <p className="font-display text-sm text-bulb">{vibeScore}/100</p>
+          </div>
+          <div className="text-right">
+            <p className="font-body text-[10px] text-haze">Queue {queueCount} · Happy {happyGuests}</p>
+            <p className="font-body text-[10px] text-gold">High-vibe streak: {vibeStreak}</p>
+          </div>
+        </div>
+        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-ink/70">
+          <div
+            className={`h-full transition-all duration-500 ${vibeScore >= 70 ? "bg-gradient-to-r from-gold via-magenta to-cyan" : "bg-gradient-to-r from-haze via-magenta to-cyan"}`}
+            style={{ width: `${vibeScore}%` }}
+          />
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {(["steady", "hype", "chill"] as MusicMood[]).map((mood) => (
+            <button
+              key={mood}
+              onClick={() => onChangeMood(mood)}
+              className="rounded-full border px-2.5 py-1 font-body text-[10px]"
+              style={{
+                borderColor: musicMood === mood ? selectedTheme.palette.accent : "rgba(123,108,168,0.35)",
+                background: musicMood === mood ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.18)",
+                color: musicMood === mood ? "#FFF3D6" : "#7B6CA8",
+              }}
+            >
+              {mood === "steady" ? "Balanced Set" : mood === "hype" ? "Peak Hour Push" : "Cool Down Session"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeEvent && (
+        <div className="rounded-xl border border-gold/45 bg-gold/10 p-2.5">
+          <p className="font-display text-xs text-gold">{activeEvent.title}</p>
+          <p className="font-body text-[11px] text-bulb">{activeEvent.detail}</p>
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <button
@@ -136,6 +201,55 @@ export default function NightclubView({
         <div className="h-full bg-gradient-to-r from-cyan to-gold transition-all duration-500" style={{ width: `${pct}%` }} />
       </div>
 
+      <div className="rounded-xl border border-haze/20 bg-ink/55 p-2.5">
+        <p className="font-body text-[10px] uppercase tracking-wide text-haze">Active objectives</p>
+        <div className="mt-2 space-y-1.5">
+          {objectives.map((objective) => {
+            const amount = Math.min(objective.target, objective.progress);
+            const width = Math.max(4, Math.round((amount / objective.target) * 100));
+            return (
+              <div key={objective.id} className="rounded-lg border border-haze/15 bg-plum/35 p-1.5">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="font-body text-[10px] text-bulb">{objective.complete ? "✅" : "🎯"} {objective.label}</span>
+                  <span className="font-body text-[10px] text-haze">{amount}/{objective.target}</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-ink/80">
+                  <div className="h-full rounded-full bg-gradient-to-r from-magenta to-cyan" style={{ width: `${width}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-haze/25 bg-plum/35 p-2.5">
+        <p className="font-body text-[10px] uppercase tracking-wide text-haze">Theme switching & room expansion</p>
+        {!progress.themeSwitchUnlocked ? (
+          <p className="mt-1 font-body text-[11px] text-bulb">
+            Unlock theme switching at 15 stars or 180 reputation. Progress: ★ {progress.totalStars}/15 · Rep {progress.reputation}/180
+          </p>
+        ) : (
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {progress.unlockedThemeIds.map((themeId) => (
+              <button
+                key={themeId}
+                onClick={() => onSwitchTheme(themeId)}
+                className="rounded-full border px-2.5 py-1 font-body text-[10px]"
+                style={{
+                  borderColor: progress.selectedThemeId === themeId ? selectedTheme.palette.accent : "rgba(123,108,168,0.35)",
+                  color: progress.selectedThemeId === themeId ? "#FFF3D6" : "#7B6CA8",
+                }}
+              >
+                {themeId === "open-format" ? "Open Format" : themeId === "edm-house" ? "EDM / House" : "Latin Nights"}
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="mt-2 font-body text-[11px] text-gold">
+          VIP section unlocks by completing room progression. Second themed room unlocks at Lv 4 (teaser active, full simulation in roadmap).
+        </p>
+      </div>
+
       <RoomSwitcher viewedZone={viewedZone} activeZone={activeZone} clearedZoneSet={clearedZoneSet} onSelect={setViewedZone} />
 
       {/* Alerts from rooms you're not standing in */}
@@ -163,11 +277,44 @@ export default function NightclubView({
       </div>
 
       <RoomStage
-        wallGradient={zoneDef.theme.wallGradient}
-        floorGradient={zoneDef.theme.floorGradient}
+        wallGradient={`${selectedTheme.palette.wallTint}, ${zoneDef.theme.wallGradient}`}
+        floorGradient={`${selectedTheme.palette.floorTint}, ${zoneDef.theme.floorGradient}`}
         tiltUp={zoneDef.theme.tiltUp}
         grimeOpacity={grimeOpacity}
       >
+        {guests.slice(0, 10).map((guest, idx) => {
+          const slotX = 15 + (idx % 5) * 17;
+          const slotY = 66 + Math.floor(idx / 5) * 13;
+          const stateEmoji = guest.state === "QUEUED"
+            ? "⏳"
+            : guest.state === "DANCING"
+              ? "✨"
+              : guest.state === "ORDERING"
+                ? "🍹"
+                : guest.state === "SERVED"
+                  ? "💫"
+                  : guest.state === "LEAVING"
+                    ? "↗"
+                    : "•";
+          return (
+            <div
+              key={guest.id}
+              className="pointer-events-none absolute"
+              style={{ left: `${slotX}%`, top: `${slotY}%`, transform: "translate(-50%, -50%)" }}
+              aria-hidden="true"
+            >
+              <div style={{ fontSize: 16 }}>{guest.look}</div>
+              <div className="-mt-1 text-center font-body text-[8px] text-bulb">{stateEmoji}</div>
+            </div>
+          );
+        })}
+
+        {queueCount > 0 && (
+          <div className="absolute rounded-lg border border-gold/40 bg-ink/80 px-2 py-1" style={{ left: "15%", top: "80%", transform: "translate(-50%, -50%)" }}>
+            <p className="font-body text-[9px] text-gold">Queue {queueCount}</p>
+          </div>
+        )}
+
         {/* Dance floor grid */}
         {viewedZone === "Dance Floor" &&
           Array.from({ length: FLOOR_ROWS }, (_, row) => {
