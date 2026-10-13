@@ -196,7 +196,7 @@ export default function MiniGames({ levels, onWin, onExit }: Props) {
   const finish = useCallback(
     (stars: Stars | 0) => {
       if (!active) return;
-      if (stars > 0) onWin(active.id, active.level, stars);
+      if (stars !== 0) onWin(active.id, active.level, stars);
       setResult(stars);
     },
     [active, onWin],
@@ -206,7 +206,7 @@ export default function MiniGames({ levels, onWin, onExit }: Props) {
     return (
       <div className="flex flex-col items-center gap-4 pt-10 text-center">
         <p className="font-display text-2xl text-magenta">{result > 0 ? "Nice!" : "Try again"}</p>
-        {result > 0 && <p>{"★".repeat(result)} · +{coinsForStars(result)} coins</p>}
+        {result !== 0 && <p>{"★".repeat(result)} · +{coinsForStars(result)} coins</p>}
         <button
           className="rounded-full bg-gradient-to-r from-magenta to-cyan px-6 py-2 font-display text-ink"
           onClick={() => {

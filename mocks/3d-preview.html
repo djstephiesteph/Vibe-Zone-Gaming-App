@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vibe Zone - 3D mock (preview only)</title>
+<style>
+  :root { --rx: -28deg; --ry: -20deg; --ink:#0B0A12; --magenta:#FF2E88; --gold:#F5B841; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--ink); color:#eee; font-family: system-ui, sans-serif; display:flex; flex-direction:column; align-items:center; min-height:100vh; user-select:none; }
+  header { width:100%; max-width:420px; display:flex; justify-content:space-between; padding:14px 18px; }
+  header b { color:var(--magenta); letter-spacing:.08em; }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; padding:0 12px; max-width:420px; }
+  .tabs button, .btn { background:transparent; color:#cbb; border:1px solid #444; border-radius:999px; padding:5px 12px; font-size:12px; cursor:pointer; }
+  .tabs button.on { color:var(--ink); background:var(--accent, var(--magenta)); border-color:transparent; }
+  .viewport { width:100%; max-width:420px; height:430px; perspective:900px; perspective-origin:50% 40%; cursor:grab; touch-action:none; overflow:hidden; position:relative; }
+  .scene { position:absolute; left:50%; top:52%; width:0; height:0; transform-style:preserve-3d; transform: scale(1.05) rotateX(var(--rx)) rotateY(var(--ry)); }
+  .plane { position:absolute; backface-visibility:hidden; }
+  .floor { width:320px; height:280px; left:-160px; top:-140px; transform: translateY(100px) rotateX(90deg); backface-visibility:visible; }
+  .back  { width:320px; height:200px; left:-160px; top:-100px; transform: translateZ(-140px); }
+  .left  { width:280px; height:200px; left:-140px; top:-100px; transform: translateX(-160px) rotateY(90deg); }
+  .right { width:280px; height:200px; left:-140px; top:-100px; transform: translateX(160px) rotateY(-90deg); }
+  .box, .face { position:absolute; }
+  .box { transform-style:preserve-3d; }
+  .face { border:1px solid rgba(255,255,255,.12); }
+  .glow { box-shadow: 0 0 14px var(--c); }
+  .bill { position:absolute; transform: translate(-50%,-100%) rotateY(calc(-1 * var(--ry))); line-height:1; white-space:nowrap; pointer-events:none; }
+  .buy { pointer-events:auto; cursor:pointer; background:var(--ink); color:var(--gold); border:1px solid var(--gold); border-radius:999px; font-size:10px; padding:3px 8px; }
+  .buy.no { opacity:.45; }
+
+  /* One shared person rig so everyone is the same size */
+  .person { position:relative; width:44px; height:78px; font-size:0; }
+  .person i, .person b { position:absolute; display:block; }
+  .person .head { left:13px; top:0; width:18px; height:18px; border-radius:50%; background:var(--skin,#f1c27d); border-top:6px solid var(--hair,#3a2a1a); }
+  .person .torso { left:12px; top:19px; width:20px; height:27px; border-radius:6px; background:var(--shirt,#4a6); }
+  .person .limb { width:6px; border-radius:3px; transform-origin: top center; }
+  .person .arm { top:20px; height:22px; background:var(--skin,#f1c27d); }
+  .person .leg { top:45px; height:30px; background:var(--pants,#2b2250); }
+  .person .la { left:6px; } .person .ra { left:32px; } .person .ll { left:13px; } .person .rl { left:25px; }
+  .walk .la, .walk .rl { animation: swing .6s ease-in-out infinite alternate; }
+  .walk .ra, .walk .ll { animation: swing .6s ease-in-out infinite alternate-reverse; }
+  .walk .rig { animation: bob .6s ease-in-out infinite; }
+  .rig { position:absolute; inset:0; }
+  .person .broom { left:0; top:16px; width:3px; height:34px; background:#8a5a2b; transform-origin: top center; transform: rotate(-20deg); }
+  .person .broom::after { content:""; position:absolute; left:-4px; bottom:-6px; width:11px; height:8px; background:#d9b25f; border-radius:2px 2px 5px 5px; }
+  .side { transform: scaleX(.55); }
+  .outdoor { left:160px; top:-140px; width:70px; height:280px; transform: translateY(100px) rotateX(90deg); background:repeating-linear-gradient(0deg,#1d1b27 0 40px,#23202f 40px 80px); backface-visibility:visible; }
+  .spill { pointer-events:auto; cursor:pointer; background:#1b4a6b; color:#cfe9ff; border:1px solid #5aa9ff; border-radius:999px; font-size:10px; padding:3px 8px; }
+  .person .cap { left:11px; top:-2px; width:22px; height:7px; background:#16204a; border-radius:3px 3px 0 0; }
+  .tag { position:absolute; left:50%; top:-14px; transform:translateX(-50%); font-size:9px; color:var(--gold); white-space:nowrap; }
+  @keyframes swing { from { transform: rotate(-28deg); } to { transform: rotate(28deg); } }
+  @keyframes bob { 50% { transform: translateY(-3px); } }
+  .row { display:flex; gap:8px; margin:8px 0; }
+  .note { max-width:420px; font-size:12px; color:#9a93b0; padding:4px 18px 14px; text-align:center; }
+</style>
+</head>
+<body>
+<header><b>VIBE ZONE 3D</b><span id="inc" style="font-size:11px;color:#9a93b0"></span><span id="coins"></span></header>
+<div class="tabs" id="tabs"></div>
+<div class="viewport" id="vp"><div class="scene" id="scene"></div></div>
+<div class="row"><button class="btn" id="spin">Auto-rotate: off</button><button class="btn" id="reset">Reset view</button><button class="btn" id="fresh">Fresh start</button><button class="btn" id="level">Finish a level</button></div>
+<div class="row" id="sizebar"></div>
+<p class="note">Preview only. Starts like a fresh game: an empty room, 500 coins, just the owner. Tap a price tag to buy it. Buy tables and chairs in the Seating tab: the line outside starts at 3 patrons and grows as you add seats. Staff only appear once hired. Prices and items match the game's 10 zones.</p>
+<script>
+// [id, label, price, x, y, w, h, d, color, kind(f|s), elev, look]  x/y are the game's 0-100 room coordinates
+const ROOMS = {
+  "Entrance": { accent:"#F5B841", wall:"linear-gradient(#2b2012,#130d08)", floor:"linear-gradient(#171022,#0d0815)", spots:[
+    ["ent-door","Front door",90],
+    ["ent-sign","Open sign",130,50,0,6,14,90,"#FF2E88","f",132],
+    ["ent-rope","Entry rope",110],
+    ["ent-cashbox","Cash box",80,70,22,18,24,30,"#3fae6a","f"],
+    ["ent-closet","Supply closet (mop + bucket)",70,0,0,36,100,30,"#6b4a2b","f"],
+    ["ent-host","Hire a door host",150,34,25,0,0,0,"#7B6CA8","s",0,{shirt:"#7B6CA8",hair:"#222"}],
+    ["ent-security","Hire a security guard",170,66,25,0,0,0,"#16204a","s",0,{shirt:"#16204a",pants:"#0c1230",hair:"#222",cap:1}] ] },
+  "Seating": { accent:"#7B6CA8", wall:"linear-gradient(#241a38,#130d20)", floor:"linear-gradient(#201630,#120c1e)", spots:[
+    ["seat-1","Table",130,25,30,38,4,38,"#c58b4e","f"],
+    ["seat-4","Table",150,25,62,38,4,38,"#c58b4e","f"],
+    ["seat-5","Table",135,75,30,38,4,38,"#c58b4e","f"],
+    ["seat-8","Table",200,75,62,38,4,38,"#c58b4e","f"],
+    ["seat-waiter","Hire a waiter",220,50,80,0,0,0,"#fff","s",0,{shirt:"#f2f2f2",pants:"#111",hair:"#5a3a1a"}],
+    ["seat-trash","Trash can",60,92,86,18,30,18,"#6c7a89","f"],
+    ["seat-busser","Hire a busser (clears tables)",180,30,90,0,0,0,"#fff","s",0,{shirt:"#1f6f5c",pants:"#222",hair:"#222"}],
+    ["seat-janitor","Hire a janitor (floors + spills)",250,10,90,0,0,0,"#fff","s",0,{shirt:"#6b7a8f",pants:"#334",hair:"#333",cap:1}] ] },
+  "Bar": { accent:"#F5B841", wall:"linear-gradient(#2a1a12,#150c09)", floor:"linear-gradient(#1f1512,#120b09)", spots:[
+    ["bar-counter","Bar counter",300,50,50,210,34,36,"#8a5a2b","f"],
+    ["bar-bottles","Bottle rack",220,28,50,16,18,10,"#2e8b57","f",34],["bar-glass1","Cocktail glass",200,44,50,10,12,10,"#ff7ab8","f",34],
+    ["bar-glass2","Cocktail glass",210,56,50,10,12,10,"#ffb86b","f",34],["bar-ice","Ice bucket",240,72,50,16,14,16,"#9fd8ff","f",34],
+    ["bar-stool1","Bar stool",230,32,82,18,22,18,"#a08cd0","f"],["bar-stool2","Bar stool",235,68,82,18,22,18,"#a08cd0","f"],
+    ["bar-tender","Hire a bartender",350,50,20,0,0,0,"#000","s",0,{shirt:"#111",pants:"#111",hair:"#6b3a1a"}] ] },
+  "Kitchen": { accent:"#8CAABE", wall:"linear-gradient(#1b2530,#0e141a)", floor:"linear-gradient(#151c24,#0c1014)", spots:[
+    ["kit-stove","Stove",300,28,32,56,44,40,"#8CAABE","f"],["kit-prep","Prep counter",250,50,38,70,36,36,"#b9c6cf","f"],["kit-pantry","Pantry",260,72,32,40,80,30,"#6c8396","f"],
+    ["kit-window","Order window",240,50,70,60,30,12,"#F5B841","f"],
+    ["kit-chef","Hire a chef",380,50,18,0,0,0,"#fff","s",0,{shirt:"#fafafa",pants:"#333",hair:"#222"}] ] },
+  "Bathrooms": { accent:"#2EE6D6", wall:"linear-gradient(#10202a,#081015)", floor:"linear-gradient(#121a26,#0a0f17)", spots:[
+    ["bath-w1","Women's stall 1",150,20,32,40,70,40,"#ff7ab8","f"],["bath-w2","Women's stall 2",160,20,52,40,70,40,"#ff7ab8","f"],["bath-w3","Women's stall 3",170,20,72,40,70,40,"#ff7ab8","f"],
+    ["bath-m1","Men's stall 1",150,80,32,40,70,40,"#5aa9ff","f"],["bath-m2","Men's stall 2",160,80,52,40,70,40,"#5aa9ff","f"],["bath-m3","Men's stall 3",170,80,72,40,70,40,"#5aa9ff","f"],
+    ["bath-sink","Sink",180,38,86,26,26,20,"#cfe9ee","f"],["bath-mirror","Mirror",170,62,86,26,50,4,"#9fd8ff","f"],
+    ["bath-attendant","Hire a bathroom attendant",260,50,58,0,0,0,"#2EE6D6","s",0,{shirt:"#2EE6D6",pants:"#234",hair:"#222"}] ] }
+};
+
+const FLOOR_Y = [78.6, 71.9, 65.1, 58.4, 51.6, 44.9, 38.1, 31.4];
+const FLOOR_PRICES = [100, 110, 125, 140, 150, 160, 170, 180];
+Object.assign(ROOMS, {
+  "Dance Floor": { accent:"#FF2E88", wall:"linear-gradient(#2a1240,#150a26)", floor:"linear-gradient(#1c1430,#120c1e)",
+    spots: FLOOR_Y.map((y, i) => [`floor-row-${i}`, `Floor row ${i + 1} of 8`, FLOOR_PRICES[i], 50, y, 210, 3, 17, i % 2 ? "#ff2e88" : "#7a2cff", "f"]) },
+  "DJ Booth": { accent:"#2EE6D6", wall:"linear-gradient(#0f2a30,#08141a)", floor:"linear-gradient(#12202a,#0a1218)", spots:[
+    ["dj-table","DJ table",380,50,50,198,34,40,"#1f2a33","f"],
+    ["dj-mixer","Mixer",300,38,50,28,8,22,"#9aa7b2","f",34],["dj-headphones","Headphones",260,62,50,16,10,16,"#FF2E88","f",34],
+    ["dj-vinyl","Vinyl",250,24,50,22,3,22,"#111","f",34],["dj-eq","EQ panel",270,76,50,24,8,18,"#2EE6D6","f",34],
+    ["dj-speaker1","Speaker stack",310,22,78,40,70,30,"#222","f"],["dj-speaker2","Speaker stack",320,78,78,40,70,30,"#222","f"],
+    ["dj-booth-dj","Hire a DJ",400,50,18,0,0,0,"#000","s",0,{shirt:"#111",pants:"#222",hair:"#2EE6D6"}] ] },
+  "Lighting": { accent:"#FFF3D6", wall:"linear-gradient(#262018,#120e09)", floor:"linear-gradient(#1a1610,#0c0a07)", spots:[
+    ["light-1","Marquee bulb",160,15,30,14,14,14,"#fff3d6","f",170],["light-2","Marquee bulb",165,35,16,14,14,14,"#fff3d6","f",170],["light-3","Marquee bulb",170,65,16,14,14,14,"#fff3d6","f",170],
+    ["light-4","Marquee bulb",175,85,30,14,14,14,"#fff3d6","f",170],["light-5","Marquee bulb",180,50,10,14,14,14,"#fff3d6","f",170],
+    ["light-spot1","Spotlight",250,30,55,18,26,18,"#ff3b3b","f",150],["light-spot2","Spotlight",300,70,55,18,26,18,"#3b7bff","f",150] ] },
+  "VIP Lounge": { accent:"#F5B841", wall:"linear-gradient(#3a2a0c,#1a1206)", floor:"linear-gradient(#2a1f10,#120c06)", spots:[
+    ["vip-booth-l","VIP booth",400,20,42,60,42,40,"#7a1f4a","f"],["vip-candle","Table candle",350,30,62,8,14,8,"#F5B841","f"],
+    ["vip-booth-r","VIP booth",420,80,42,60,42,40,"#7a1f4a","f"],["vip-plant","Plant",380,70,62,20,34,20,"#2e8b57","f"],
+    ["vip-host","Hire a VIP host",600,50,25,0,0,0,"#F5B841","s",0,{shirt:"#c0153f",pants:"#111",hair:"#6b3a1a"}] ] },
+  "Grand Reopening": { accent:"#FF2E88", wall:"linear-gradient(#2a1240,#150a26)", floor:"linear-gradient(#1c1430,#120c1e)", spots:[
+    ["final-sign","VIBE ZONE sign, lit",800,50,40,200,60,10,"#FF2E88","f",60] ] }
+});
+const ORDER = ["Entrance","Dance Floor","Seating","Bathrooms","Bar","Kitchen","DJ Booth","Lighting","VIP Lounge","Grand Reopening"];
+
+const START = 500;
+let coins = START, owned = new Set(), current = "Entrance";
+const scene = document.getElementById("scene"), tabs = document.getElementById("tabs");
+const X = (x) => (x - 50) * 3, Z = (y) => (y - 50) * 2.6;
+const price = (id) => Object.values(ROOMS).flatMap((r) => r.spots).find((s) => s[0] === id)[2];
+
+function box(x, z, w, h, d, color, glow, elev = 0) {
+  const b = document.createElement("div");
+  b.className = "box";
+  b.style.cssText = `left:${x - w/2}px;top:${100 - h - elev}px;width:${w}px;height:${h}px;transform:translateZ(${z}px);`;
+  [[`width:${w}px;height:${h}px;transform:translateZ(${d/2}px)`,.9],[`width:${w}px;height:${h}px;transform:rotateY(180deg) translateZ(${d/2}px)`,.6],
+   [`width:${d}px;height:${h}px;left:${(w-d)/2}px;transform:rotateY(90deg) translateZ(${w/2}px)`,.7],[`width:${d}px;height:${h}px;left:${(w-d)/2}px;transform:rotateY(-90deg) translateZ(${w/2}px)`,.7],
+   [`width:${w}px;height:${d}px;top:${(h-d)/2}px;transform:rotateX(90deg) translateZ(${h/2}px)`,1.1]].forEach(([css, l]) => {
+    const f = document.createElement("div");
+    f.className = "face" + (glow ? " glow" : "");
+    f.style.cssText = css + `;background:${color};filter:brightness(${l});--c:${color};`;
+    b.appendChild(f);
+  });
+  return b;
+}
+
+const TABLES = new Set(["seat-1","seat-4","seat-5","seat-8"]);
+const CORNERS = [[-1,-1],[1,-1],[-1,1],[1,1]];
+const tableDims = (n) => ({ 2:[38,38], 3:[46,46], 4:[58,58], 5:[84,46], 6:[100,46] })[n];
+function chairBoxes(x, z, side) {
+  const out = [box(x, z, 18, 4, 18, "#a08cd0", false, 14), box(x, z + side * 8, 18, 18, 3, "#8a76b8", false, 18)];
+  CORNERS.forEach(([sx, sz]) => out.push(box(x + sx * 7, z + sz * 7, 3, 14, 3, "#3b2a1a")));
+  return out;
+}
+// A table with one chair per seat, split across its two long sides
+function tableParts(x, z, n) {
+  const [w, d] = tableDims(n), out = [box(x, z, w, 4, d, "#c58b4e", false, 26)];
+  CORNERS.forEach(([sx, sz]) => out.push(box(x + sx * (w / 2 - 4), z + sz * (d / 2 - 4), 4, 26, 4, "#4a2f1a")));
+  const back = Math.ceil(n / 2);
+  [[back, -1], [n - back, 1]].forEach(([count, side]) => {
+    for (let i = 0; i < count; i++) out.push(...chairBoxes(x + (count === 1 ? 0 : (i - (count - 1) / 2) * (w / count)), z + side * (d / 2 + 13), side));
+  });
+  return out;
+}
+
+// Wall art and windows: bought in tiers, each tier needs a higher level
+const ART = [80, 160, 260], WIN = [100, 180, 280], POSTER = ["#ff6fae", "#6fd6ff", "#ffd36f"];
+function decorTag(kind, label, x, y, z) {
+  const t = decor[kind], next = (kind === "art" ? ART : WIN)[t];
+  if (t >= 3) return;
+  const locked = level < t + 1;
+  const text = locked ? `${label} tier ${t + 1} · Level ${t + 1}` : `${t ? "⬆ " : ""}${label} · 🪙${next}`;
+  scene.appendChild(bill(`<button class="buy ${locked || coins < next ? "no" : ""}" data-decor="${kind}" data-cost="${next}">${text}</button>`, x, z, y));
+}
+function decorScene() {
+  const a = decor.art, w = decor.window;
+  if (a) [-60, 10, 80].forEach((x, i) => {
+    const s = 26 + a * 6, h = s + 10;
+    if (a > 1) scene.appendChild(box(x, -139, s + 8, h + 8, 3, "#F5B841", a === 3, 92));
+    scene.appendChild(box(x, -138, s, h, 2, POSTER[i], a === 3, 96));
+  });
+  if (w) [-70, 30].forEach((z) => {
+    const d = 40 + w * 12, h = 36 + w * 10;
+    scene.appendChild(box(-157, z, 3, h + 6, d + 6, "#5a3a22", false, 88));
+    scene.appendChild(box(-155, z, 2, h, d, w === 3 ? "#2a6fff" : "#1b2a5a", w === 3, 91));
+  });
+  decorTag("art", "🖼️ Wall art", 0, -40, -139);
+  decorTag("window", "🪟 Windows", -157, -40, -20);
+}
+
+function bill(html, x, z, y = 100) {
+  const wrap = document.createElement("div");
+  wrap.style.cssText = `position:absolute;transform-style:preserve-3d;transform:translate3d(${x}px,${y}px,${z}px);`;
+  const e = document.createElement("div");
+  e.className = "bill"; e.innerHTML = html;
+  wrap.appendChild(e);
+  return wrap;
+}
+
+function person(look = {}, { walk = false, broom = false, tag = "", side = false } = {}) {
+  const v = Object.entries({ "--shirt":look.shirt, "--pants":look.pants, "--hair":look.hair, "--skin":look.skin }).filter(([, c]) => c).map(([k, c]) => `${k}:${c}`).join(";");
+  return `<div class="person ${walk ? "walk" : ""} ${side ? "side" : ""}" style="${v}">${tag ? `<span class="tag">${tag}</span>` : ""}<div class="rig"><i class="limb leg ll"></i><i class="limb leg rl"></i><i class="torso"></i><i class="limb arm la"></i><i class="limb arm ra">${broom ? '<b class="broom"></b>' : ""}</i><i class="head"></i>${look.cap ? '<i class="cap"></i>' : ""}</div></div>`;
+}
+
+function render() {
+  const r = ROOMS[current];
+  scene.innerHTML = "";
+  document.documentElement.style.setProperty("--accent", r.accent);
+  document.getElementById("coins").textContent = `Lv ${level} · 🪙 ${coins}`;
+  if (buildSize > maxSize()) buildSize = 2;
+  renderSizeBar();
+  const mk = (c, bg) => { const p = document.createElement("div"); p.className = "plane " + c; p.style.background = bg; scene.appendChild(p); };
+  mk("floor", r.floor); mk("back", r.wall); mk("left", r.wall); mk("right", r.wall);
+  if (current === "Entrance") mk("outdoor", "");
+  decorScene();
+
+  const addTag = (id, label, x, y, z) => {
+    const afford = coins >= cost(id);
+    scene.appendChild(bill(`<button class="buy ${afford ? "" : "no"}" data-id="${id}" data-cost="${cost(id)}">${label} · 🪙${cost(id)}</button>`, x, z, y));
+  };
+
+  r.spots.forEach(([id, label, , px, py, w, h, d, color, kind, elev = 0, look]) => {
+    const has = owned.has(id);
+    if (id === "ent-door") {
+      // Door sits in the right wall; the queue forms outside it
+      if (has) {
+        scene.append(box(160, -122, 14, 130, 14, "#F5B841"), box(160, -18, 14, 130, 14, "#F5B841"), box(160, -70, 14, 16, 118, "#F5B841", true, 114), box(160, -70, 4, 112, 90, "#15101f", true));
+      } else {
+        scene.appendChild(box(160, -70, 2, 112, 90, "#ffffff", false));
+        addTag(id, "🚪 " + label, 160, -30, -70);
+      }
+      return;
+    }
+    if (id === "ent-rope") {
+      if (has) {
+        const n = queueSize();
+        for (let k = 0; k <= n; k++) scene.appendChild(box(192, -42 + k * 24, 6, 30, 6, "#F5B841"));
+        for (let k = 0; k < n; k++) scene.appendChild(box(192, -30 + k * 24, 3, 3, 24, "#c0153f", false, 22));
+      } else addTag(id, label, 192, 70, 30);
+      return;
+    }
+    if (id === "ent-closet") {
+      if (has) {
+        scene.append(box(-125, -120, 36, 100, 30, "#6b4a2b"), box(-92, -118, 14, 14, 14, "#F5B841"), box(-74, -118, 3, 48, 3, "#8a5a2b", false, 6), box(-74, -118, 10, 6, 10, "#ddd"));
+      } else {
+        scene.appendChild(box(-125, -120, 36, 1, 30, "#ffffff"));
+        addTag(id, label, -125, 70, -120);
+      }
+      return;
+    }
+    // Entrance pieces hug the door; everything else uses the game's own coordinates
+    const entrance = { "ent-sign": [162, -70], "ent-cashbox": [125, -20], "ent-host": [118, -45], "ent-security": [182, -108] }[id];
+    const x0 = entrance ? entrance[0] : X(px), z0 = entrance ? entrance[1] : Z(py);
+    const lit = /^(ent-sign|floor-row|light-|final-sign|dj-eq)/.test(id);
+    const tagX = x0 + (id.startsWith("floor-row-") ? (+id.slice(-1) % 2 ? 70 : -70) : 0);
+    if (TABLES.has(id)) {
+      const size = tableSize[id];
+      if (has) {
+        tableParts(x0, z0, size).forEach((b) => scene.appendChild(b));
+        if (size < maxSize()) scene.appendChild(bill(`<button class="buy ${coins >= 30 ? "" : "no"}" data-up="${id}" data-cost="30">⬆ ${size + 1} seats · 🪙30</button>`, x0, z0, 60));
+      } else {
+        const [tw, td] = tableDims(buildSize);
+        scene.appendChild(box(x0, z0, tw, 1, td, "#ffffff"));
+        addTag(id, `${buildSize}-seat table`, x0, 70, z0);
+      }
+      return;
+    }
+    if (kind === "s") {
+      if (has) scene.appendChild(bill(person(look, { tag: label.replace("Hire a ", "") }), x0, z0, 100));
+      else addTag(id, label, x0, 60, z0);
+    } else if (has) {
+      scene.appendChild(box(x0, z0, w, h, d, color, lit, elev));
+    } else {
+      scene.appendChild(box(x0, z0, w, 1, d, "#ffffff", false, elev));
+      addTag(id, label, tagX, 100 - elev - 18, z0);
+    }
+  });
+
+  // Patrons wait outside the right wall, facing the door; the rope keeps them in line
+  if (current === "Entrance" && owned.has("ent-door")) {
+    const looks = [{shirt:"#c0392b",hair:"#222"},{shirt:"#2e86c1",hair:"#a0522d",skin:"#d9a066"},{shirt:"#8e44ad",hair:"#111",skin:"#8d5524"},{shirt:"#16a085",hair:"#d4a017"},{shirt:"#e67e22",hair:"#222",skin:"#c68642"},{shirt:"#2c3e50",hair:"#6b3a1a"},{shirt:"#d35400",hair:"#111",skin:"#8d5524"},{shirt:"#27ae60",hair:"#c0a060",skin:"#d9a066"}];
+    looks.forEach((l, i) => i < queueSize() && scene.appendChild(bill(person(l, { side: true }), 176, -30 + i * 24, 100)));
+  }
+
+  // Trash left on tables; tap to clear it (needs a trash can) or hire a busser
+  if (current === "Seating") {
+    tableMess.forEach((id) => {
+      const s = ROOMS.Seating.spots.find((t) => t[0] === id), x = X(s[3]), z = Z(s[4]);
+      scene.append(box(x - 5, z, 8, 6, 8, "#bfae8a", false, 30), box(x + 8, z + 4, 6, 8, 6, "#8a8a8a", false, 30));
+      const label = owned.has("seat-trash") ? `🗑️ Clear · +${tidyPay()}` : "Needs a trash can";
+      scene.appendChild(bill(`<button class="spill" data-mess="${id}">${label}</button>`, x, z, 50));
+    });
+  }
+
+  spills.forEach((s, i) => {
+    scene.appendChild(box(s.x, s.z, 30, 1, 24, "#2f7fc0"));
+    scene.appendChild(bill(`<button class="spill" data-spill="${i}">🧽 Mop · +${mopPay()}</button>`, s.x, s.z, 80));
+  });
+
+  // Opening night crowd once the final sign is lit
+  if (current === "Grand Reopening" && owned.has("final-sign")) {
+    const crowd = [{shirt:"#c0392b"},{shirt:"#2e86c1",skin:"#d9a066"},{shirt:"#8e44ad",skin:"#8d5524"},{shirt:"#16a085"},{shirt:"#e67e22",skin:"#c68642"},{shirt:"#2c3e50"},{shirt:"#d35400",skin:"#8d5524"},{shirt:"#27ae60"}];
+    crowd.forEach((l, i) => scene.appendChild(bill(person(l), -105 + (i % 4) * 70, 15 + Math.floor(i / 4) * 55, 100)));
+  }
+
+  // The owner is the same size as everyone else and sweeps the room
+  const owner = bill(person({ shirt:"#F5B841", pants:"#2b2250", hair:"#FF2E88" }, { walk: true, broom: spills.length > 0, tag: "Owner" }), 0, 0, 100);
+  const dur = 8000;
+  owner.animate([{ transform: "translate3d(-110px,100px,105px)" }, { transform: "translate3d(110px,100px,105px)" }], { duration: dur, direction: "alternate", iterations: Infinity, easing: "linear" });
+  owner.firstChild.firstChild.animate([{ transform: "scaleX(1)", offset: 0 }, { transform: "scaleX(1)", offset: .499 }, { transform: "scaleX(-1)", offset: .5 }, { transform: "scaleX(-1)", offset: 1 }], { duration: dur * 2, iterations: Infinity });
+  scene.appendChild(owner);
+
+  [...tabs.children].forEach((b) => b.classList.toggle("on", b.textContent === current));
+}
+
+scene.addEventListener("click", (e) => {
+  const ms = e.target.dataset && e.target.dataset.mess;
+  if (ms) { if (owned.has("seat-trash")) { tableMess.delete(ms); coins += tidyPay(); render(); } return; }
+  const dk = e.target.dataset && e.target.dataset.decor;
+  if (dk) {
+    const t = decor[dk], c = (dk === "art" ? ART : WIN)[t];
+    if (t < 3 && level >= t + 1 && coins >= c) { coins -= c; decor[dk] = t + 1; render(); }
+    return;
+  }
+  const up = e.target.dataset && e.target.dataset.up;
+  if (up) { if (coins >= 30 && tableSize[up] < maxSize()) { coins -= 30; tableSize[up]++; render(); } return; }
+  const sp = e.target.dataset && e.target.dataset.spill;
+  if (sp !== undefined) { coins += mopPay(); spills.splice(+sp, 1); render(); return; }
+  const id = e.target.dataset && e.target.dataset.id;
+  if (!id || owned.has(id) || coins < cost(id)) return;
+  coins -= cost(id); owned.add(id);
+  if (TABLES.has(id)) tableSize[id] = buildSize;
+  render();
+});
+scene.addEventListener("pointerdown", (e) => { if (e.target.closest("button")) e.stopPropagation(); });
+
+// Progressive income: each purchase raises the passive rate and the mop payout
+const income = () => (owned.has("ent-door") ? 1 + owned.size : 0);
+// Line starts at 3 and grows by 1 for every 4 seats built, max 8
+const queueSize = () => Math.min(8, 3 + Math.floor(Object.entries(tableSize).filter(([id]) => owned.has(id)).reduce((n, [, s]) => n + s, 0) / 4));
+const mopPay = () => 5 + owned.size * 2;
+const tidyPay = () => 4 + owned.size;
+let spills = [], tableMess = new Set();
+let level = 1, buildSize = 2, tableSize = {}, decor = { art: 0, window: 0 };
+const maxSize = () => Math.min(6, 1 + level);
+const cost = (id) => (TABLES.has(id) ? price(id) + (buildSize - 2) * 25 : price(id));
+
+function renderSizeBar() {
+  const bar = document.getElementById("sizebar");
+  bar.style.display = current === "Seating" ? "flex" : "none";
+  bar.innerHTML = "<span style='font-size:12px;color:#9a93b0'>Table size:</span>" + [2, 3, 4, 5, 6].map((n) =>
+    `<button class="btn" data-size="${n}" ${n > maxSize() ? "disabled" : ""} style="${n === buildSize ? "border-color:#F5B841;color:#F5B841" : ""}">${n}${n > maxSize() ? " 🔒" : ""}</button>`).join("");
+}
+document.getElementById("sizebar").onclick = (e) => { const n = e.target.dataset.size; if (n) { buildSize = +n; render(); } };
+document.getElementById("level").onclick = () => { level++; coins += 40 + level * 10; render(); };
+setInterval(() => {
+  const n = income();
+  if (n) { coins += n; document.getElementById("coins").textContent = `Lv ${level} · 🪙 ${coins}`; document.getElementById("inc").textContent = `+${n} / 5s`; }
+  document.querySelectorAll(".buy").forEach((b) => b.classList.toggle("no", coins < +b.dataset.cost));
+}, 5000);
+setInterval(() => {
+  if (owned.has("ent-closet") && spills.length < 3) {
+    spills.push({ x: Math.round(-90 + Math.random() * 190), z: Math.round(-40 + Math.random() * 130) });
+    if (current === "Entrance") render();
+  }
+}, 9000);
+
+// Guests leave trash on tables; some bin their own if there is a can; hired help clears the rest
+setInterval(() => {
+  const tables = [...TABLES].filter((id) => owned.has(id));
+  if (!owned.has("ent-door") || !tables.length) return;
+  let changed = false;
+  if (owned.has("seat-busser") && owned.has("seat-trash") && tableMess.size) { tableMess.delete([...tableMess][0]); coins += 2; changed = true; }
+  if (owned.has("seat-janitor") && spills.length) { spills.shift(); coins += 3; changed = true; }
+  const free = tables.filter((id) => !tableMess.has(id));
+  if (free.length && Math.random() < 0.6) {
+    if (owned.has("seat-trash") && Math.random() < 0.4) coins += 2;
+    else tableMess.add(free[Math.floor(Math.random() * free.length)]);
+    changed = true;
+  }
+  if (changed) render();
+}, 8000);
+
+ORDER.forEach((n) => { const b = document.createElement("button"); b.textContent = n; b.onclick = () => { current = n; render(); }; tabs.appendChild(b); });
+document.getElementById("fresh").onclick = () => { coins = START; owned = new Set(); spills = []; tableMess = new Set(); level = 1; buildSize = 2; tableSize = {}; decor = { art: 0, window: 0 }; current = "Entrance"; render(); };
+
+const vp = document.getElementById("vp");
+let rx = -28, ry = -20, drag = null, auto = false;
+const apply = () => { document.documentElement.style.setProperty("--rx", rx + "deg"); document.documentElement.style.setProperty("--ry", ry + "deg"); };
+vp.onpointerdown = (e) => { drag = [e.clientX, e.clientY]; vp.setPointerCapture(e.pointerId); };
+vp.onpointerup = () => (drag = null);
+vp.onpointermove = (e) => { if (!drag) return; ry += (e.clientX - drag[0]) * 0.4; rx = Math.max(-70, Math.min(-5, rx - (e.clientY - drag[1]) * 0.3)); drag = [e.clientX, e.clientY]; apply(); };
+document.getElementById("spin").onclick = (e) => { auto = !auto; e.target.textContent = "Auto-rotate: " + (auto ? "on" : "off"); };
+document.getElementById("reset").onclick = () => { rx = -28; ry = -20; apply(); };
+setInterval(() => { if (auto && !drag) { ry += 0.4; apply(); } }, 16);
+apply(); render();
+</script>
+</body>
+</html>
